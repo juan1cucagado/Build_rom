@@ -1,0 +1,56 @@
+name: Build Android ROM
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up JDK 11
+        uses: actions/setup-java@v3
+        with:
+          java-version: '11'
+          distribution: 'temurin'
+
+      - name: Set up Android SDK
+        run: |
+          sudo apt update
+          sudo apt install -y openjdk-11-jdk
+          wget https://dl.google.com/android/repository/commandlinetools-linux-7583922_latest.zip
+          unzip commandlinetools-linux-7583922_latest.zip
+          yes | ./cmdline-tools/bin/sdkmanager --sdk_root=$HOME/Android/Sdk --licenses
+          ./cmdline-tools/bin/sdkmanager --sdk_root=$HOME/Android/Sdk "platform-tools" "build-tools;30.0.3" "platforms;android-30"
+
+      - name: Download repo tool
+        run: |
+          wget https://storage.googleapis.com/git-repo-downloads/repo
+          chmod a+x repo
+          sudo mv repo /usr/local/bin/
+
+      - name: Initialize repo
+        run: |
+          repo init -u https://github.com/LineageOS/android.git -b lineage-20.0
+          repo sync -j$(nproc)
+
+      - name: Set up device tree
+        run: |
+          git clone https://github.com/justsarx/dt-manaus-U1TM34.107_34_3.git device/motorola/manaus
+
+      - name: Extract proprietary blobs
+        run: |
+          ./device/motorola/manaus/extract-files.sh
+
+      - name: Build ROM
+        run: |
+          source build/envsetup.sh
+          lunch lineage_manaus-userdebug
+          mka bacon
+          
